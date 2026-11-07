@@ -17,6 +17,7 @@ from .merge import deep_merge
 
 log = logging.getLogger(__name__)
 LINE_DEDUP_S = 3.0
+SAME_VALUE_GAP_S = 20.0  # no sector is shorter than this
 
 
 def parse_laptime(v: Any) -> float | None:
@@ -151,8 +152,13 @@ class SessionState:
                 if not isinstance(sd, dict) or i > 2:
                     continue
                 v = sd.get("Value")
-                if isinstance(v, str) and v.strip() and v != _sector_value(old, i):
-                    gate = (i + 1) % 3
+                if not (isinstance(v, str) and v.strip()):
+                    continue
+                gate = (i + 1) % 3
+                last = self.last_gate_t.get((car, gate))
+                # a new value is a crossing; an identical value re-sent long after the
+                # last crossing of this gate is too (same sector time to the ms)
+                if v != _sector_value(old, i) or (last is not None and t - last > SAME_VALUE_GAP_S):
                     ev += self._gate(car, t, gate, parse_laptime(v))
         # lap count increment = line crossing
         if "NumberOfLaps" in delta:

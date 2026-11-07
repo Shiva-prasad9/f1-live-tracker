@@ -34,6 +34,8 @@ PIT_K = 0.92               # pace multiplier on an out-lap until the next gate
 PIT_LANE_TIME = 22.0       # s, rough pit-lane traversal time for drawing
 ORDER_GAP = 6.0            # m minimum drawn gap to the car ahead in Position
 HISTORY_S = 150.0          # s of leader history for the gap fallback
+CHAIN_RESET_S = 5.0        # s; restart the sector-time chain if it disagrees this much
+ASSUMED_LATENCY = 0.0      # s; constant feed latency floor to subtract (unknown, see README)
 
 
 @dataclass
@@ -53,6 +55,8 @@ class Car:
     out_reason: str = ""
     draw_D: float = 0.0
     events: int = 0
+    chain_anchor: float | None = None
+    chain_sum: float = 0.0
 
 
 @dataclass
@@ -147,12 +151,8 @@ class Estimator:
             c.last_gate, c.last_gate_t = gate, t_msg
             c.last_gate_D = self.track.gate_D_near(gate, c.pit_D)
             return
-        # refine crossing time with the sector duration when it is consistent
-        t_cross = t_msg
+        t_cross = self._crossing_time(c, gate, t_msg, sector_s)
         prev_gate = (gate - 1) % 3
-        if (sector_s and c.last_gate == prev_gate and c.last_gate_t is not None
-                and t_msg - 4.0 <= c.last_gate_t + sector_s <= t_msg + 0.5):
-            t_cross = c.last_gate_t + sector_s
         # which instance of this gate (lap)? the one nearest to where we believe the car was
         D_then = c.D - (self.t - t_cross) * self.track.v_ref(c.D) * c.k if self.t else c.D
         if c.last_gate_D is not None and c.mode in ("track", "grid"):
@@ -163,7 +163,8 @@ class Estimator:
         else:
             D_gate = self.track.gate_D_near(gate, D_then)
         # pace from the sector that just finished (green, no pit involvement)
-        if (sector_s and c.last_gate == prev_gate and not c.out_lap
+        # (not from a sector that began on the grid: it includes the standing start)
+        if (sector_s and c.last_gate == prev_gate and not c.out_lap and c.last_gate_t is not None
                 and self.state.track_status in ("1", "2") and self._f_track() == 1.0):
             ref = self.track.sector_ref_time(prev_gate)
             km = ref / sector_s
@@ -183,8 +184,29 @@ class Estimator:
             c.mode = "track"
         c.last_gate, c.last_gate_D, c.last_gate_t = gate, D_gate, t_cross
 
+    def _crossing_time(self, c: Car, gate: int, t_msg: float, sector_s: float | None) -> float:
+        """Best estimate of when the car physically crossed the gate.
+
+        Sector durations are exact, so consecutive crossings form a chain
+        t_cross_n = anchor + sum(sector times). Every message satisfies
+        t_msg_n >= t_cross_n, so the tightest anchor is min(t_msg_n - sum_n):
+        this removes feed jitter, leaving only its constant floor latency.
+        """
+        prev_gate = (gate - 1) % 3
+        if sector_s and c.last_gate == prev_gate and c.chain_anchor is not None:
+            c.chain_sum += sector_s
+            cand = t_msg - c.chain_sum
+            if abs(cand - c.chain_anchor) > CHAIN_RESET_S:
+                c.chain_anchor, c.chain_sum = t_msg, 0.0
+            else:
+                c.chain_anchor = min(c.chain_anchor, cand)
+        else:
+            c.chain_anchor, c.chain_sum = t_msg, 0.0
+        return c.chain_anchor + c.chain_sum - ASSUMED_LATENCY
+
     def _enter_pit(self, c: Car, t: float) -> None:
         c.mode, c.pit_t, c.pit_D, c.corr = "pit", t, c.D, 0.0
+        c.chain_anchor = None
 
     def _exit_pit(self, c: Car, t: float) -> None:
         if c.mode != "pit":
