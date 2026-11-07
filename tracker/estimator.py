@@ -35,6 +35,7 @@ PIT_LANE_TIME = 22.0       # s, rough pit-lane traversal time for drawing
 ORDER_GAP = 6.0            # m minimum drawn gap to the car ahead in Position
 HISTORY_S = 150.0          # s of leader history for the gap fallback
 CHAIN_RESET_S = 5.0        # s; restart the sector-time chain if it disagrees this much
+START_MISMATCH_S = 15.0    # s; re-launch if "Started" and the first S1 time disagree this much
 ASSUMED_LATENCY = 0.0      # s; constant feed latency floor to subtract (unknown, see README)
 
 
@@ -68,6 +69,7 @@ class Estimator:
     start_t: float | None = None       # race start (lights out)
     leader_hist: deque = field(default_factory=lambda: deque(maxlen=4000))
     is_race: bool = True
+    start_confirmed: bool = False
 
     # ---- helpers ---------------------------------------------------------------
     def car(self, num: str) -> Car:
@@ -124,6 +126,7 @@ class Estimator:
         kind = ev[0]
         if kind == "gate":
             _, num, t, gate, sector_s = ev
+            self._check_race_start(self.car(num), t, gate, sector_s)
             self._gate(self.car(num), t, gate, sector_s)
         elif kind == "pit_in":
             c = self.car(ev[1])
@@ -141,6 +144,38 @@ class Estimator:
                     if c.mode == "grid":
                         c.mode = "track"
                 log.info("race start at %.1f", ev[1])
+
+    def _check_race_start(self, c: Car, t_msg: float, gate: int, sector_s: float | None) -> None:
+        """Confirm the start time from the first lap-1 sector-1 time.
+
+        If SessionStatus "Started" marked the formation lap rather than lights out
+        (or never arrived), re-place cars on the grid and launch them from the
+        start time implied by t_cross - S1.
+        """
+        if (not self.is_race or self.start_confirmed or gate != 1 or not sector_s
+                or c.events > 0 or c.mode not in ("grid", "track")):
+            return
+        self.start_confirmed = True
+        t_star = t_msg - sector_s
+        if self.start_t is not None and abs(t_star - self.start_t) <= START_MISMATCH_S:
+            return
+        log.warning("race start corrected from %s to %.1f (first S1 time)", self.start_t, t_star)
+        self.start_t = t_star
+        now = self.t
+        movers = [x for x in self.cars.values() if x.events == 0 and x.mode in ("grid", "track")]
+        for x in movers:
+            self._place_on_grid(x)
+            x.mode = "track"
+        # re-simulate the launch for these cars from t_star to now
+        saved = {n: x for n, x in self.cars.items() if x not in movers}
+        self.cars = {x.num: x for x in movers}
+        self.t = t_star
+        while self.t < now - 1e-9:
+            dt = min(0.1, now - self.t)
+            self.t += dt
+            self._step(dt)
+        self.cars.update(saved)
+        self.t = now
 
     def _gate(self, c: Car, t_msg: float, gate: int, sector_s: float | None) -> None:
         if c.mode in ("out",):

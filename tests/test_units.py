@@ -194,3 +194,23 @@ def test_order_constraint():
     b.D = a.D + 50  # P2 estimated ahead of P1
     snap = {s["num"]: s for s in eng.snapshot()["cars"]}
     assert snap["2"]["D"] < snap["1"]["D"]
+
+
+def test_race_start_corrected_from_first_sector_time():
+    """'Started' 200 s too early (formation lap): the first S1 time re-launches the field."""
+    tr = synthetic_track()
+    eng = Engine(tr)
+    eng.state.load_initial("SessionInfo", {"Type": "Race"})
+    eng.state.load_initial("SessionStatus", {"Status": "Inactive"})
+    eng.state.load_initial("TimingData", {"Lines": {"1": timing_line(1), "2": timing_line(2)}})
+    eng.start(0.0)
+    eng.ingest(10.0, "SessionStatus", {"Status": "Started"})
+    eng.tick(234.0)
+    s1 = 24.0
+    eng.ingest(234.0, "TimingData", {"Lines": {"1": {"Sectors": {"0": {"Value": f"{s1:.3f}"}}}}})
+    assert eng.est.start_t == pytest.approx(210.0)
+    # car 2 (no event yet) was re-launched at 210 s: it is in sector 1, not held near gate 1 + 120 m
+    c2 = eng.est.cars["2"]
+    assert 0 < c2.D < tr.gates[1] + 50
+    c1 = eng.est.cars["1"]
+    assert c1.D + c1.corr == pytest.approx(tr.gates[1], abs=30)
