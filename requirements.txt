@@ -1,0 +1,6 @@
+aiohttp>=3.9
+requests>=2.30
+signalrcore>=1.0
+numpy>=1.26
+matplotlib>=3.8
+pytest>=8

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# raw live recordings and downloaded data are large; keep them local
+recordings/
+data/
+validation/*.png
+validation/*.json
