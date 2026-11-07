@@ -57,6 +57,7 @@ class Car:
     draw_D: float = 0.0
     events: int = 0
     chain_anchor: float | None = None
+    pit_slot: bool = False
     chain_sum: float = 0.0
 
 
@@ -97,6 +98,7 @@ class Estimator:
                 c.mode, c.out_reason = "out", "Retired" if line.get("Retired") else "Stopped"
             elif line.get("InPit"):
                 self._enter_pit(c, t)
+                c.pit_slot = True  # already in the garage when we joined: park it
             elif self.is_race and not started:
                 self._place_on_grid(c)
             else:
@@ -241,6 +243,7 @@ class Estimator:
 
     def _enter_pit(self, c: Car, t: float) -> None:
         c.mode, c.pit_t, c.pit_D, c.corr = "pit", t, c.D, 0.0
+        c.pit_slot = False
         c.chain_anchor = None
 
     def _exit_pit(self, c: Car, t: float) -> None:
@@ -371,6 +374,8 @@ class Estimator:
                     D = prev_draw - ORDER_GAP
                 prev_draw = D
             c.draw_D = D
+        pits = sorted((c for c in self.cars.values() if c.mode == "pit"), key=lambda c: (c.pit_t, c.num))
+        pit_rank = {c.num: i for i, c in enumerate(pits)}
         out = []
         drivers = self.state.drivers
         for pos, num, c in order:
@@ -384,7 +389,7 @@ class Estimator:
                 "out": c.out_reason,
             }
             if c.mode == "pit":
-                item["x"], item["y"] = self._pit_xy(c)
+                item["x"], item["y"] = self._pit_xy(c, pit_rank.get(num, 0), len(pit_rank))
             elif c.mode == "grid":
                 lat = GRID_LATERAL if c.grid_slot % 2 else -GRID_LATERAL
                 item["x"], item["y"] = self.track.xy(c.draw_D, lat)
@@ -396,9 +401,14 @@ class Estimator:
             out.append(item)
         return out
 
-    def _pit_xy(self, c: Car) -> tuple[float, float]:
+    def _pit_xy(self, c: Car, rank: int, n: int) -> tuple[float, float]:
         lane = self.track.pit_lane
-        frac = min(0.97, max(0.0, (self.t - c.pit_t) / PIT_LANE_TIME)) if self.t else 0.5
+        if c.pit_slot:  # parked in the garage: spread along the lane
+            frac = 0.1 + 0.8 * rank / max(1, n)
+        else:  # driving through; queue up instead of stacking at the end
+            travel = (self.t - c.pit_t) / PIT_LANE_TIME if self.t else 0.5
+            frac = min(0.97 - 0.035 * rank, max(0.0, travel))
+            frac = max(frac, 0.0)
         if len(lane) >= 2:
             i = frac * (len(lane) - 1)
             a = int(i)
