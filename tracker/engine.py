@@ -75,6 +75,18 @@ class Engine:
             c["sectors"] = secs
         return {"num": fastest[1], "time": fastest[0]} if fastest else None
 
+    def _weather(self) -> dict | None:
+        w = self.state.topics.get("WeatherData") or {}
+        def f(k):
+            try:
+                return float(w[k])
+            except (KeyError, TypeError, ValueError):
+                return None
+        if not w:
+            return None
+        return {"air": f("AirTemp"), "track": f("TrackTemp"), "humidity": f("Humidity"), "wind": f("WindSpeed"),
+                "wind_dir": f("WindDirection"), "rain": bool(f("Rainfall"))}
+
     def snapshot(self) -> dict:
         lc = self.state.topics.get("LapCount") or {}
         cars = self.est.snapshot() if self.initialised else []
@@ -86,7 +98,7 @@ class Engine:
             "session_status": self.state.session_status,
             "track_status": self.state.track_status,
             "lap": lc.get("CurrentLap"), "total_laps": lc.get("TotalLaps"),
-            "cars": cars, "fastest": fastest,
+            "cars": cars, "fastest": fastest, "weather": self._weather(),
         }
 
 

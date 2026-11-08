@@ -71,6 +71,10 @@ def load(year: int, event: str, session: str, latency: float = 1.0, jitter: floa
     stints = openf1.get("stints", session_key=key)
     rc = openf1.get("race_control", session_key=key)
     try:
+        weather = openf1.get("weather", session_key=key)
+    except openf1.OpenF1Error:
+        weather = []
+    try:
         grid = openf1.get("starting_grid", session_key=key)
     except openf1.OpenF1Error:
         grid = []
@@ -123,6 +127,19 @@ def load(year: int, event: str, session: str, latency: float = 1.0, jitter: floa
 
     def td(t: float, car, delta: dict):
         msgs.append((t, "TimingData", {"Lines": {str(car): delta}}, False))
+
+    # ---- weather (same shape as the live WeatherData topic: all values are strings)
+    def wx(w: dict) -> dict:
+        m = {"AirTemp": "air_temperature", "TrackTemp": "track_temperature", "Humidity": "humidity",
+             "Pressure": "pressure", "WindSpeed": "wind_speed", "WindDirection": "wind_direction", "Rainfall": "rainfall"}
+        return {k: str(w[v]) for k, v in m.items() if w.get(v) is not None}
+    wsorted = sorted(weather, key=lambda w: w["date"])
+    before = [w for w in wsorted if _ts(w["date"]) <= t_start]
+    if before:
+        msgs.append((t0, "WeatherData", wx(before[-1]), True))
+    for w in wsorted:
+        if _ts(w["date"]) > t_start:
+            msgs.append((_ts(w["date"]), "WeatherData", wx(w), False))
 
     # ---- laps -> sector values and lap counts
     last_lap_end: dict[int, float] = {}

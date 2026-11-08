@@ -31,6 +31,11 @@
   #main { position: relative; flex: 1; min-width: 0; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   #bg { pointer-events: none; }
+  #wx { position: absolute; right: 12px; bottom: 12px; display: none; padding: 8px 12px; border-radius: 12px; background: #14171dcc;
+    backdrop-filter: blur(6px); font-size: 12px; box-shadow: 0 4px 18px #0008; line-height: 1.5; font-variant-numeric: tabular-nums; }
+  #wx .big { font-size: 15px; font-weight: 700; } #wx .m { color: var(--muted); }
+  #wx .arrow { display: inline-block; transition: transform .6s; color: #7fb4ff; }
+  #wx.rain { box-shadow: 0 0 16px #4c8dff66; border: 1px solid #4c8dff55; }
   body.fx-on #main { background: radial-gradient(ellipse at 50% 40%, #151a2b 0%, #0b0d14 75%); }
   #fxbtn { all: unset; cursor: pointer; padding: 3px 9px; border-radius: 10px; background: var(--panel); font-size: 12px;
     color: var(--muted); } #fxbtn.on { color: #c77dff; box-shadow: 0 0 8px #c77dff55; }
@@ -97,6 +102,7 @@
     <canvas id="c"></canvas>
     <div id="ctl"></div>
     <div id="card"></div>
+    <div id="wx"></div>
     <div id="toasts"></div>
     <div id="status">
       <span class="pill" id="lap"></span>

@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 URL = "wss://livetiming.formula1.com/signalrcore"
 NEGOTIATE = "https://livetiming.formula1.com/signalrcore/negotiate"
 TOPICS = ["Heartbeat", "SessionInfo", "SessionStatus", "DriverList", "TimingData", "TimingAppData",
-          "TrackStatus", "LapCount", "ExtrapolatedClock", "RaceControlMessages", "TopThree"]
+          "TrackStatus", "LapCount", "ExtrapolatedClock", "RaceControlMessages", "TopThree", "WeatherData"]
 REC_DIR = Path(__file__).resolve().parents[2] / "recordings"
 QUIET_RECONNECT_S = 90  # heartbeats arrive every ~15 s during a session
 

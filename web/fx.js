@@ -10,7 +10,11 @@
     red:    [[235, 40, 50], [170, 20, 60], [255, 80, 40], [200, 30, 30]],
     purple: [[190, 90, 255], [120, 60, 255], [230, 90, 220], [150, 70, 240]],
   };
-  const st = { mood: "green", speed: 1, paused: false, boost: 0, on: true };
+  PALETTES.rain = [[60, 90, 140], [40, 70, 120], [70, 100, 150], [50, 60, 110]];
+  const st = { mood: "green", speed: 1, paused: false, boost: 0, on: true,
+               wx: null, rainK: 0, sunK: 0, chillK: 0, slant: 0 };
+  const drops = Array.from({ length: 170 }, () => ({ x: Math.random(), y: Math.random(), v: 0.9 + Math.random() * 0.9,
+                                                      l: 10 + Math.random() * 16, a: 0.18 + Math.random() * 0.3 }));
   try { st.on = localStorage.getItem("fx") !== "off"; } catch (e) {}
   if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) st.on = false;
 
@@ -40,7 +44,16 @@
     g.clearRect(0, 0, W, H);
     if (!st.on) return;
     st.boost = Math.max(0, st.boost - dt / 2200);
-    const pal = PALETTES[st.boost > 0 ? "purple" : st.mood];
+    const w = st.wx || {};
+    const raining = !!w.rain;
+    const kk = Math.min(1, dt / 900);
+    st.rainK += ((raining ? 1 : 0) - st.rainK) * kk;
+    st.sunK += ((!raining && w.track >= 36 ? Math.min(1, (w.track - 34) / 16) : 0) - st.sunK) * kk;
+    st.chillK += ((!raining && w.air != null && w.air < 16 ? Math.min(1, (16 - w.air) / 10) : 0) - st.chillK) * kk;
+    // rain slant follows the wind (wind_dir is where it blows FROM; screen-x drift is a visual approximation)
+    const slantT = w.wind ? Math.max(-0.7, Math.min(0.7, -Math.sin((w.wind_dir || 0) * Math.PI / 180) * (0.12 + w.wind * 0.08))) : 0;
+    st.slant += (slantT - st.slant) * kk;
+    const pal = PALETTES[st.boost > 0 ? "purple" : st.rainK > 0.5 ? "rain" : st.mood];
     const k = Math.min(1, dt / 500);                       // ease colours toward the palette
     g.globalCompositeOperation = "lighter";
     blobs.forEach((b, i) => {
@@ -66,6 +79,26 @@
       g.beginPath(); g.moveTo(x, y); g.lineTo(x - len, y + len * 0.36); g.stroke();
     }
     g.globalCompositeOperation = "source-over";
+    if (st.sunK > 0.01) {          // hot track: warm sun glow from the top-right
+      const gr = g.createRadialGradient(W * 0.85, -H * 0.05, 0, W * 0.85, -H * 0.05, Math.max(W, H) * 0.8);
+      gr.addColorStop(0, `rgba(255,170,60,${0.28 * st.sunK})`); gr.addColorStop(1, "rgba(255,120,30,0)");
+      g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    }
+    if (st.chillK > 0.01) { g.fillStyle = `rgba(120,200,255,${0.06 * st.chillK})`; g.fillRect(0, 0, W, H); }
+    if (st.rainK > 0.01) {         // rain: dim the sky a little and draw slanted drops
+      g.fillStyle = `rgba(5,12,30,${0.22 * st.rainK})`; g.fillRect(0, 0, W, H);
+      g.lineCap = "round"; g.lineWidth = 1.1;
+      const n = Math.round(drops.length * st.rainK);
+      for (let i = 0; i < n; i++) {
+        const d = drops[i];
+        d.y += d.v * dt / 1000 * 1.1; d.x += st.slant * d.v * dt / 1000 * 1.1;
+        if (d.y > 1.05) { d.y = -0.05; d.x = Math.random() * 1.2 - 0.1; }
+        if (d.x > 1.1) d.x -= 1.2; if (d.x < -0.1) d.x += 1.2;
+        const x = d.x * W, y = d.y * H;
+        g.strokeStyle = `rgba(170,205,255,${d.a * st.rainK})`;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x + st.slant * d.l, y + d.l); g.stroke();
+      }
+    }
   }
 
   function setOn(v) {
@@ -78,6 +111,7 @@
       const ts = String(d.track_status);
       st.mood = ts === "5" ? "red" : ["2", "4", "6", "7"].includes(ts) ? "sc" : "green";
       st.speed = d.mode === "replay" ? d.speed : 1; st.paused = !!d.paused;
+      st.wx = d.weather || null;
     },
     pulse() { st.boost = 1; },                          // new fastest lap
     toggle() { setOn(!st.on); },

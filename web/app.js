@@ -334,7 +334,28 @@ function updateHeader(d) {
   flag.textContent = txt;
   flag.className = "pill " + cls;
   updateControls(d);
+  updateWeather(d);
   if (window.FX) FX.update(d);
+}
+
+// ---- weather -----------------------------------------------------------------------------
+// ?wx=rain|hot|cold previews the effects when the real weather is boring.
+const DEMO_WX = { rain: { air: 14, track: 19, humidity: 92, wind: 6.5, wind_dir: 250, rain: true },
+                  hot: { air: 31, track: 52, humidity: 40, wind: 1.2, wind_dir: 120, rain: false },
+                  cold: { air: 8, track: 11, humidity: 60, wind: 3, wind_dir: 20, rain: false } };
+const demoWx = DEMO_WX[new URLSearchParams(location.search).get("wx")];
+const wxEl = document.getElementById("wx");
+function updateWeather(d) {
+  if (demoWx) d.weather = demoWx;
+  const w = d.weather;
+  if (!w) { wxEl.style.display = "none"; return; }
+  const icon = w.rain ? "🌧" : w.track >= 38 ? "☀️" : "⛅";
+  const n = (v, u = "") => (v == null ? "–" : Math.round(v * 10) / 10 + u);
+  wxEl.style.display = "block";
+  wxEl.className = w.rain ? "rain" : "";
+  wxEl.innerHTML = `<div class="big">${icon} ${w.rain ? "Rain" : "Dry"} · ${n(w.air, "°")}</div>` +
+    `<div><span class="m">Track</span> ${n(w.track, "°C")} · <span class="m">Humidity</span> ${n(w.humidity, "%")}</div>` +
+    `<div><span class="m">Wind</span> ${n(w.wind, " m/s")} <span class="arrow" style="transform:rotate(${(w.wind_dir || 0) + 180}deg)">↑</span></div>`;
 }
 
 // ---- replay controls ---------------------------------------------------------------------
