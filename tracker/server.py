@@ -64,6 +64,8 @@ def make_app(engine_ref: dict, bc: Broadcaster, control: dict | None = None) -> 
                             control["speed"] = float(cmd["speed"])
                         if isinstance(cmd.get("paused"), bool):
                             control["paused"] = cmd["paused"]
+                        if cmd.get("restart") is True:
+                            control["restart"] = True
                     except (ValueError, AttributeError):
                         pass
         finally:
@@ -90,37 +92,50 @@ async def serve(engine_ref: dict, bc: Broadcaster, port: int, control: dict | No
 async def run_replay(engine: Engine, msgs: list[Message], start_t: float, speed: float,
                      port: int, loop_forever: bool = True) -> None:
     bc = Broadcaster()
-    control = {"speed": float(speed), "paused": False}
-    await serve({"engine": engine}, bc, port, control)
-    i = 0
-    while i < len(msgs) and (msgs[i][0] <= start_t or msgs[i][3]):
-        t, topic, data, initial = msgs[i]
-        engine.ingest(t, topic, data, initial)
-        i += 1
-    engine.start(start_t)
-    vclock, last = start_t, time.monotonic()
+    ref = {"engine": engine}
+    control = {"speed": float(speed), "paused": False, "restart": False}
+    await serve(ref, bc, port, control)
     end_t = msgs[-1][0] if msgs else start_t
+
+    def begin() -> tuple[int, float]:
+        """(Re)build the engine at start_t; returns (next message index, virtual clock)."""
+        eng = Engine(ref["engine"].track)
+        ref["engine"] = eng
+        i = 0
+        while i < len(msgs) and (msgs[i][0] <= start_t or msgs[i][3]):
+            t, topic, data, initial = msgs[i]
+            eng.ingest(t, topic, data, initial)
+            i += 1
+        eng.start(start_t)
+        return i, start_t
+
+    i, vclock = begin()
+    last = time.monotonic()
     log.info("replay from %.0f s before the last message at %sx", end_t - start_t, speed)
     while True:
         await asyncio.sleep(1 / HZ)
         now = time.monotonic()
-        if not control["paused"]:
+        if control["restart"]:
+            control["restart"] = False
+            i, vclock = begin()
+            control["paused"] = False
+            log.info("replay restarted")
+        finished = i >= len(msgs) and vclock > end_t + 10
+        if not control["paused"] and not finished:
             vclock += (now - last) * control["speed"]
         last = now
+        eng = ref["engine"]
         while i < len(msgs) and msgs[i][0] <= vclock:
             t, topic, data, initial = msgs[i]
-            engine.ingest(t, topic, data, initial)
+            eng.ingest(t, topic, data, initial)
             i += 1
-        engine.tick(vclock)
-        snap = engine.snapshot()
+        eng.tick(vclock)
+        snap = eng.snapshot()
         snap["mode"], snap["speed"], snap["paused"] = "replay", control["speed"], control["paused"]
-        await bc.send(snap)
-        if i >= len(msgs) and vclock > end_t + 10:
-            if not loop_forever:
-                return
-            log.info("replay finished; keeping the server up (Ctrl+C to quit)")
-            while True:
-                await asyncio.sleep(3600)
+        snap["finished"] = finished
+        await bc.send(snap)   # keeps sending the final state so new tabs still get a picture
+        if finished and not loop_forever:
+            return
 
 
 # ---- live mode ------------------------------------------------------------------------

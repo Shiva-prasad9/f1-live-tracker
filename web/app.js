@@ -327,7 +327,7 @@ function updateHeader(d) {
   document.getElementById("title").textContent = d.meeting || "F1 Live Tracker";
   const clock = d.t ? new Date(d.t * 1000).toISOString().slice(11, 19) + " UTC" : "";
   document.getElementById("subtitle").textContent =
-    `${d.session || ""} · ${d.session_status || "—"} · ${clock}${d.mode === "replay" ? ` · replay ${d.speed}×${d.paused ? " (paused)" : ""}` : ""}`;
+    `${d.session || ""} · ${d.session_status || "—"} · ${clock}${d.mode === "replay" ? ` · replay ${d.speed}×${d.paused ? " (paused)" : ""}${d.finished ? " · finished" : ""}` : ""}`;
   document.getElementById("lap").textContent = d.lap ? `Lap ${d.lap}${d.total_laps ? " / " + d.total_laps : ""}` : "";
   const [txt, cls] = FLAGS[d.track_status] || ["", ""];
   const flag = document.getElementById("flag");
@@ -343,16 +343,18 @@ let ctlKey = "";
 function updateControls(d) {
   if (d.mode !== "replay") { ctl.style.display = "none"; return; }
   ctl.style.display = "flex";
-  const key = `${d.speed}|${d.paused}`;
+  const key = `${d.speed}|${d.paused}|${!!d.finished}`;
   if (key === ctlKey) return;
   ctlKey = key;
-  ctl.innerHTML = `<button data-p="1" class="${d.paused ? "on" : ""}">${d.paused ? "▶ Play" : "⏸ Pause"}</button>` +
+  ctl.innerHTML = `<button data-r="1" title="Restart the replay">⟲</button>` +
+    `<button data-p="1" class="${d.paused ? "on" : ""}">${d.paused ? "▶ Play" : "⏸ Pause"}</button>` +
     SPEEDS.map((s) => `<button data-s="${s}" class="${s === d.speed && !d.paused ? "on" : ""}">${s}×</button>`).join("");
 }
 ctl.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || !ws || ws.readyState !== 1) return;
-  if (b.dataset.p) ws.send(JSON.stringify({ paused: !(latest && latest.paused) }));
+  if (b.dataset.r) { ws.send(JSON.stringify({ restart: true })); lastFastest = null; prevPos.clear(); trails.clear(); }
+  else if (b.dataset.p) ws.send(JSON.stringify({ paused: !(latest && latest.paused) }));
   else ws.send(JSON.stringify({ speed: Number(b.dataset.s), paused: false }));
 });
 window.addEventListener("keydown", (e) => {
