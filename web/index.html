@@ -35,6 +35,44 @@
   .pill.sc { background: var(--sc); color: #000; font-weight: 700; }
   .pill.red { background: var(--red); font-weight: 700; }
   .pill.conn-bad { background: var(--red); }
+  /* --- replay controls, hover card, toasts, tower effects --- */
+  #ctl { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); display: none; gap: 4px;
+    background: var(--panel); padding: 4px; border-radius: 12px; box-shadow: 0 2px 14px #0008; }
+  #ctl button { all: unset; cursor: pointer; padding: 4px 9px; border-radius: 8px; color: var(--muted);
+    font-weight: 600; font-size: 12px; transition: background .15s, color .15s; }
+  #ctl button:hover { background: #262a33; color: var(--text); }
+  #ctl button.on { background: #e10600; color: #fff; box-shadow: 0 0 10px #e1060088; }
+  #card { position: absolute; pointer-events: none; min-width: 210px; padding: 10px 12px 9px; border-radius: 12px;
+    background: #14171dee; border: 1px solid var(--accent, #444); box-shadow: 0 6px 30px #000a, 0 0 18px var(--accent, #0000);
+    backdrop-filter: blur(6px); opacity: 0; transform: translateY(6px) scale(.97); transition: opacity .12s, transform .12s; z-index: 5; }
+  #card.show { opacity: 1; transform: none; }
+  #card .hd { display: flex; align-items: baseline; gap: 8px; }
+  #card .code { font-size: 20px; font-weight: 800; letter-spacing: .02em; }
+  #card .nm { color: var(--muted); font-size: 12px; }
+  #card .team { color: var(--accent); font-size: 11px; margin: 1px 0 7px; }
+  #card .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; font-variant-numeric: tabular-nums; }
+  #card .kv span:nth-child(odd) { color: var(--muted); }
+  #card .kv span:nth-child(even) { text-align: right; font-weight: 600; }
+  .purple { color: #c77dff !important; text-shadow: 0 0 8px #c77dffaa; }
+  .green { color: #3fe08a !important; }
+  #card .secs { display: flex; gap: 5px; margin-top: 8px; }
+  #card .secs div { flex: 1; text-align: center; padding: 2px 0; border-radius: 6px; background: #20242c; font-size: 11px;
+    font-variant-numeric: tabular-nums; }
+  #card .badge { display: inline-block; margin-top: 7px; padding: 2px 8px; border-radius: 9px; font-size: 11px; font-weight: 700;
+    background: #c77dff22; color: #c77dff; border: 1px solid #c77dff66; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 10px #c77dff99; } }
+  #toasts { position: absolute; left: 14px; bottom: 14px; display: flex; flex-direction: column-reverse; gap: 6px; pointer-events: none; }
+  .toast { padding: 6px 12px; border-radius: 10px; background: #14171dee; border-left: 4px solid var(--c, #888); font-size: 12px;
+    box-shadow: 0 4px 18px #0009; animation: tin .25s ease-out, tout .4s ease-in 4.2s forwards; }
+  @keyframes tin { from { opacity: 0; transform: translateX(-24px); } }
+  @keyframes tout { to { opacity: 0; transform: translateX(-12px); } }
+  .row { cursor: pointer; transition: background .15s; border-left: 3px solid transparent; }
+  .row:hover, .row.hl { background: #242932; }
+  .row.pinned { background: #2a2f3a; border-left-color: var(--c, #fff); }
+  .row.up { animation: up 1.4s ease-out; } .row.down { animation: down 1.4s ease-out; }
+  @keyframes up { 0% { background: #3fb95066; } 100% { background: transparent; } }
+  @keyframes down { 0% { background: #e5484d55; } 100% { background: transparent; } }
+  .row .fl { color: #c77dff; font-size: 10px; margin-left: 3px; }
   @media (max-width: 700px) {
     #app { flex-direction: column; }
     #tower { width: 100%; height: 40%; order: 2; }
@@ -52,6 +90,9 @@
   </div>
   <div id="main">
     <canvas id="c"></canvas>
+    <div id="ctl"></div>
+    <div id="card"></div>
+    <div id="toasts"></div>
     <div id="status">
       <span class="pill" id="lap"></span>
       <span class="pill" id="flag"></span>

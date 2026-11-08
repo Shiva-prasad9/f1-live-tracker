@@ -35,7 +35,7 @@ class Broadcaster:
             self.clients.discard(ws)
 
 
-def make_app(engine_ref: dict, bc: Broadcaster) -> web.Application:
+def make_app(engine_ref: dict, bc: Broadcaster, control: dict | None = None) -> web.Application:
     async def index(_):
         return web.FileResponse(WEB / "index.html")
 
@@ -57,6 +57,15 @@ def make_app(engine_ref: dict, bc: Broadcaster) -> web.Application:
             async for msg in ws:
                 if msg.type == WSMsgType.ERROR:
                     break
+                if msg.type == WSMsgType.TEXT and control is not None:
+                    try:  # replay controls from the page: {"speed": 5} / {"paused": true}
+                        cmd = json.loads(msg.data)
+                        if isinstance(cmd.get("speed"), (int, float)) and 0 < cmd["speed"] <= 100:
+                            control["speed"] = float(cmd["speed"])
+                        if isinstance(cmd.get("paused"), bool):
+                            control["paused"] = cmd["paused"]
+                    except (ValueError, AttributeError):
+                        pass
         finally:
             bc.clients.discard(ws)
         return ws
@@ -69,8 +78,8 @@ def make_app(engine_ref: dict, bc: Broadcaster) -> web.Application:
     return app
 
 
-async def serve(engine_ref: dict, bc: Broadcaster, port: int) -> web.AppRunner:
-    runner = web.AppRunner(make_app(engine_ref, bc))
+async def serve(engine_ref: dict, bc: Broadcaster, port: int, control: dict | None = None) -> web.AppRunner:
+    runner = web.AppRunner(make_app(engine_ref, bc, control))
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", port).start()
     log.info("open http://localhost:%d", port)
@@ -81,7 +90,8 @@ async def serve(engine_ref: dict, bc: Broadcaster, port: int) -> web.AppRunner:
 async def run_replay(engine: Engine, msgs: list[Message], start_t: float, speed: float,
                      port: int, loop_forever: bool = True) -> None:
     bc = Broadcaster()
-    await serve({"engine": engine}, bc, port)
+    control = {"speed": float(speed), "paused": False}
+    await serve({"engine": engine}, bc, port, control)
     i = 0
     while i < len(msgs) and (msgs[i][0] <= start_t or msgs[i][3]):
         t, topic, data, initial = msgs[i]
@@ -94,7 +104,8 @@ async def run_replay(engine: Engine, msgs: list[Message], start_t: float, speed:
     while True:
         await asyncio.sleep(1 / HZ)
         now = time.monotonic()
-        vclock += (now - last) * speed
+        if not control["paused"]:
+            vclock += (now - last) * control["speed"]
         last = now
         while i < len(msgs) and msgs[i][0] <= vclock:
             t, topic, data, initial = msgs[i]
@@ -102,7 +113,7 @@ async def run_replay(engine: Engine, msgs: list[Message], start_t: float, speed:
             i += 1
         engine.tick(vclock)
         snap = engine.snapshot()
-        snap["mode"], snap["speed"] = "replay", speed
+        snap["mode"], snap["speed"], snap["paused"] = "replay", control["speed"], control["paused"]
         await bc.send(snap)
         if i >= len(msgs) and vclock > end_t + 10:
             if not loop_forever:
