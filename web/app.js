@@ -290,6 +290,7 @@ function updateTower(data) {
       const c = data.cars.find((k) => k.num === f.num);
       toast(`🟣 <b>FASTEST LAP</b> <span style="color:${c ? c.color : "#c77dff"}">${esc(c ? c.code : f.num)}</span> ${fmtLap(f.time)}`, "#c77dff");
     }
+    if (lastFastest && window.FX) FX.pulse();
     lastFastest = f;
   }
   el.innerHTML = live.map(row).join("");
@@ -333,6 +334,7 @@ function updateHeader(d) {
   flag.textContent = txt;
   flag.className = "pill " + cls;
   updateControls(d);
+  if (window.FX) FX.update(d);
 }
 
 // ---- replay controls ---------------------------------------------------------------------

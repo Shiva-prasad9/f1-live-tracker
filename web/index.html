@@ -7,7 +7,7 @@
 <style>
   :root {
     --bg: #111317; --panel: #1a1d23; --text: #e8e8ea; --muted: #8b8f98;
-    --track: #3a3f4a; --track-edge: #4b5160; --line: #e8e8ea; --pit: #2c3038;
+    --track: #3d4352; --track-edge: #566078; --line: #e8e8ea; --pit: #2c3038;
     --sc: #f5c518; --red: #e5484d; --green: #3fb950;
   }
   * { box-sizing: border-box; }
@@ -30,6 +30,10 @@
   #outlist .label { color: var(--muted); margin: 0 12px 4px; font-size: 11px; letter-spacing: .05em; }
   #main { position: relative; flex: 1; min-width: 0; }
   canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #bg { pointer-events: none; }
+  body.fx-on #main { background: radial-gradient(ellipse at 50% 40%, #151a2b 0%, #0b0d14 75%); }
+  #fxbtn { all: unset; cursor: pointer; padding: 3px 9px; border-radius: 10px; background: var(--panel); font-size: 12px;
+    color: var(--muted); } #fxbtn.on { color: #c77dff; box-shadow: 0 0 8px #c77dff55; }
   #status { position: absolute; top: 10px; right: 12px; display: flex; gap: 8px; align-items: center; }
   .pill { padding: 3px 8px; border-radius: 10px; background: var(--panel); font-size: 12px; }
   .pill.sc { background: var(--sc); color: #000; font-weight: 700; }
@@ -89,6 +93,7 @@
     <div id="outlist"></div>
   </div>
   <div id="main">
+    <canvas id="bg"></canvas>
     <canvas id="c"></canvas>
     <div id="ctl"></div>
     <div id="card"></div>
@@ -96,10 +101,12 @@
     <div id="status">
       <span class="pill" id="lap"></span>
       <span class="pill" id="flag"></span>
+      <button id="fxbtn" title="Background effects (B)">✦ FX</button>
       <span class="pill" id="conn">●</span>
     </div>
   </div>
 </div>
+<script src="/static/fx.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
