@@ -205,6 +205,12 @@ def load(year: int, event: str, session: str, latency: float = 1.0, jitter: floa
     for car, end in last_lap_end.items():
         if end < t_finish - 200:
             td(end + 90, car, {"Retired": True})
+    # a car that never completed a lap (lap-1 crash) has no entry above
+    for d in drivers:
+        car = d["driver_number"]
+        if car not in last_lap_end:
+            starts = [_ts(lp["date_start"]) for lp in by_car.get(car, {}).values() if lp.get("date_start")]
+            td(max(starts, default=t_start) + 90, car, {"Retired": True})
 
     msgs.sort(key=lambda m: (m[0], not m[3]))
     meta = {"session_key": key, "t_start": t_start, "t_end": t_end, "t_finish": t_finish,
