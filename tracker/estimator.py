@@ -33,6 +33,7 @@ LAUNCH_ACCEL = 10.0        # m/s^2 from a standing start
 PIT_K = 0.92               # pace multiplier on an out-lap until the next gate
 PIT_LANE_TIME = 22.0       # s, rough pit-lane traversal time for drawing
 ORDER_GAP = 6.0            # m minimum drawn gap to the car ahead in Position
+ORDER_MAX_CLAMP = 80.0     # m; a bigger violation means Position is stale (pit exit, overtake): trust D
 HISTORY_S = 150.0          # s of leader history for the gap fallback
 CHAIN_RESET_S = 5.0        # s; restart the sector-time chain if it disagrees this much
 START_MISMATCH_S = 15.0    # s; re-launch if "Started" and the first S1 time disagree this much
@@ -371,7 +372,10 @@ class Estimator:
             D = c.D
             if c.mode in ("track", "grid", "gap"):
                 if self.is_race and prev_draw is not None and D > prev_draw - ORDER_GAP:
-                    D = prev_draw - ORDER_GAP
+                    # only nudge small timing-noise violations; a large one means the Position
+                    # order is stale (e.g. a car just left the pits) and must not drag the cars behind it
+                    if D - (prev_draw - ORDER_GAP) <= ORDER_MAX_CLAMP:
+                        D = prev_draw - ORDER_GAP
                 prev_draw = D
             c.draw_D = D
         pits = sorted((c for c in self.cars.values() if c.mode == "pit"), key=lambda c: (c.pit_t, c.num))

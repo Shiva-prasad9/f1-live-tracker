@@ -149,7 +149,27 @@ injected sector-to-sector pace noise (up to ±0.36 s per sector) plus the 0.3 s 
 
 ### Real race: 2025 São Paulo GP
 
-VALIDATION_RESULTS
+Replay of the real 2025 race through the same pipeline (`python -m tracker validate --year 2025
+--event "São Paulo Grand Prix" --session Race`). Timing messages are rebuilt from OpenF1 lap/sector data
+with a simulated 1.0 ± 0.3 s feed latency; ground truth is OpenF1 GPS location projected onto the
+centreline. The error is measured on the *drawn* position (what the page shows). 190,821 samples, every
+0.5 s per car on track:
+
+| | mean | median | p95 | p99 | within 50 m | within 100 m |
+|---|---|---|---|---|---|---|
+| all cars | 66.8 m | 41.6 m | 203 m | 511 m | 61 % | 90 % |
+
+- **The `< 50 m` target is not met** (61 % of samples; the synthetic test also misses it for the maximum).
+  Typical error is ~40 m; 90 % of the time a car is drawn within 100 m of its real position.
+- **Bias −55 m** (drawn behind the truth) is almost exactly the simulated 1 s latency at ~190 km/h; the real
+  latency of the live feed is unknown (see limitations).
+- **Tail:** 0.6 % of samples from cars still running are above 600 m. The worst cases are cars that stopped
+  on track: the replay only reports them retired much later than the live feed would, and the estimator has
+  no other stop signal, so it keeps driving them to the next gate and holds them there (cars 5 and 16 here).
+- **Bug found by this run and fixed:** the "never draw a car ahead of the car in front" constraint used a
+  stale `Position` order (e.g. right after a pit exit) and dragged every car behind it back by up to half a
+  lap for ~10 s. It now only nudges violations below 80 m. This took the mean from 141 m to 67 m and p95
+  from 701 m to 203 m.
 
 ## Known limitations
 
