@@ -85,8 +85,8 @@ flowchart LR
   T[(tracks/interlagos.json<br/>centreline, v_ref, gates, pit)] --> E
   E -->|snapshot 10 Hz| W[aiohttp<br/>WebSocket /ws]
   W --> B[browser canvas<br/>rAF interpolation + timing tower]
-  O -. ground truth: OpenF1 location .-> V[validate]
-  A -. ground truth: Position.z .-> V
+  O -.->|"ground truth: OpenF1 location"| V[validate]
+  A -.->|"ground truth: Position.z"| V
   E --> V
 ```
 
