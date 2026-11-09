@@ -7,3 +7,4 @@ recordings/
 data/
 validation/*.png
 validation/*.json
+.vscode/
