@@ -8,39 +8,55 @@ topics (`TimingData`, `LapCount`, `DriverList`, `TrackStatus`, `SessionStatus`, 
 `TimingAppData`) don't, so positions are estimated from timing events with a dead-reckoning
 observer that is corrected by measurement updates.
 
-## Setup
+## Quick start
+
+You need **Python 3.10 or newer** (check with `python3 --version`) and an internet connection the first time.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/Shiva-prasad9/f1-live-tracker.git
+cd f1-live-tracker
+python3 run.py          # Windows: python run.py
 ```
 
-Python 3.10+. Tested on 3.12 / Linux.
+1. It sets itself up on the first run (about a minute) and asks what you want:
+   - **1 = Replay**: watch the real 2026 São Paulo GP from a saved recording. Works any time, even offline.
+   - **2 = Live**: connect to the live F1 timing feed. Cars show up while a session is running.
+2. It prints a link, **http://localhost:8000**, and opens it in your browser.
+3. **Ctrl+C** in the terminal to stop.
 
-## Run
+Skip the question with `python3 run.py replay` or `python3 run.py live`.
+
+In the page:
+- **Replay:** speed buttons (1x to 50x), pause (`Space`), restart (⟲).
+- **Hover** a car or a name in the table for its lap times, gap and tyres. **Click** to pin it.
+- **B** switches the background effects off. Add `?wx=rain` to the link to preview the rain effect.
+
+### Trouble?
+- *"python3: command not found"*: install Python from https://www.python.org/downloads/ (on Windows tick "Add python.exe to PATH").
+- *Live shows a finished or empty session*: nothing is running right now. Use Replay, or try again on a race weekend.
+- *Port 8000 busy*: it picks the next free port and prints the link, or pass `--port 9000`.
+- *Positions look a bit off*: they are **estimates** from timing data (no GPS needed), typically within about 40 m, see "Real race" below.
+
+## For developers
 
 ```bash
-# live (race day)
-python -m tracker live                      # then open http://localhost:8000
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt      # adds pytest + matplotlib
+pytest                                   # 21 tests
 
-# replay a past session through exactly the same parser + estimator
-python -m tracker replay --year 2025 --event "São Paulo Grand Prix" --session Race --speed 5
-#   --speed 1..20, --start -1 (minutes relative to lights out), --file recordings/<date>.jsonl
-
-# replay validation against real car positions (prints per-lap mean/p95/max, writes a plot)
-python -m tracker validate --year 2025 --event "São Paulo Grand Prix" --session Race
-
-# rebuild a track model from OpenF1 (tracks/interlagos.json is committed)
-python -m tracker build-track --circuit Interlagos
-
-# tests
-pytest
+python -m tracker live                                   # same as run.py live
+python -m tracker replay --file replays/sao-paulo-2026-race.jsonl.gz --speed 10 --start 0
+python -m tracker replay --year 2025 --event "São Paulo Grand Prix" --session Race   # rebuilt from OpenF1 (needs internet, not during a live session)
+python -m tracker validate --year 2025 --event "São Paulo Grand Prix" --session Race # error vs real GPS, writes a plot
+python -m tracker build-track --circuit Interlagos       # tracks/interlagos.json is committed
 ```
+
+Live mode saves every raw feed message to `recordings/<date>.jsonl` (git-ignored); replay it with
+`python -m tracker replay --file recordings/<date>.jsonl`. `replays/` holds the bundled recording.
 
 ## Race-day checklist (São Paulo GP)
 
-1. `source .venv/bin/activate && python -m tracker live` **about 15 minutes before lights out**.
+1. `python3 run.py live` **about 15 minutes before lights out**.
    The log should show `subscribed: DriverList, …, TimingData, …` and `session: São Paulo Grand Prix Race`.
 2. Open http://localhost:8000. Before the start the cars sit on the grid in grid order.
 3. At the start the log prints `race start at …`. If it also prints `race start corrected …`, the

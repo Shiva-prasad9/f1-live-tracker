@@ -6,6 +6,7 @@ Line formats:
 """
 from __future__ import annotations
 
+import gzip
 import json
 from pathlib import Path
 
@@ -25,7 +26,10 @@ def feed_time(item: list, recv: float | None) -> float:
 def load(path: str | Path) -> list[Message]:
     msgs: list[Message] = []
     last_t = 0.0
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    path = Path(path)
+    text = (gzip.open(path, "rt", encoding="utf-8").read() if path.suffix == ".gz"
+            else path.read_text(encoding="utf-8"))
+    for raw in text.splitlines():
         try:
             rec = json.loads(raw)
         except json.JSONDecodeError:
