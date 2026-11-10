@@ -59,8 +59,13 @@ def _fmt(sec: float) -> str:
 
 def load(year: int, event: str, session: str, latency: float = 1.0, jitter: float = 0.3,
          seed: int = 1) -> tuple[list[Message], dict]:
+    return load_session(find_session(year, event, session), event, latency, jitter, seed)
+
+
+def load_session(sess: dict, event: str, latency: float = 1.0, jitter: float = 0.3,
+                 seed: int = 1) -> tuple[list[Message], dict]:
+    """Rebuild live-format messages for one OpenF1 session row; `event` is the meeting name to show."""
     rnd = random.Random(seed)
-    sess = find_session(year, event, session)
     key = sess["session_key"]
     log.info("OpenF1 session %s: %s %s", key, sess.get("location"), sess.get("session_name"))
     drivers = openf1.get("drivers", session_key=key)

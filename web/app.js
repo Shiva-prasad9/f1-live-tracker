@@ -28,12 +28,22 @@ const trails = new Map();    // num -> [{x, y}] world coords
 const prevPos = new Map();   // num -> last tower position (for flashes / toasts)
 const flash = new Map();     // num -> {dir, until}
 let lastFastest = null;
+let currentLabel = null;
 
 // ---- track & view ---------------------------------------------------------------------
-async function loadTrack() {
-  const r = await fetch("/track");
-  track = await r.json();
-  fit();
+let trackLoading = false;
+function resetScene() {
+  snaps.length = 0; trails.clear(); prevPos.clear(); flash.clear();
+  lastFastest = null; pinned = null; hovered = null; latest = null;
+}
+async function ensureTrack(name) {            // fetch the track once per race; reset the scene when it changes
+  if (trackLoading) return;
+  trackLoading = true;
+  try {
+    const r = await fetch("/track");
+    if (r.ok) { track = await r.json(); resetScene(); fit(); }
+  } catch (e) { /* retried on the next frame */ }
+  trackLoading = false;
 }
 
 function fit() {
@@ -45,10 +55,10 @@ function fit() {
   if (!track) return;
   const xs = track.x, ys = track.y;
   const minx = Math.min(...xs), maxx = Math.max(...xs), miny = Math.min(...ys), maxy = Math.max(...ys);
-  const pad = 50;
-  const scale = Math.min((w - 2 * pad) / (maxx - minx), (h - 2 * pad) / (maxy - miny));
+  const pad = 50, padTop = w < 700 ? 100 : pad;   // on phones the control bar sits over the top of the map
+  const scale = Math.min((w - 2 * pad) / (maxx - minx), (h - pad - padTop) / (maxy - miny));
   view = { scale, ox: (w - scale * (maxx - minx)) / 2 - scale * minx,
-           oy: (h + scale * (maxy - miny)) / 2 + scale * miny };
+           oy: (padTop + h - pad + scale * (maxy - miny)) / 2 + scale * miny };
 }
 
 const sx = (x) => view.ox + view.scale * x;
@@ -358,6 +368,80 @@ function updateWeather(d) {
     `<div><span class="m">Wind</span> ${n(w.wind, " m/s")} <span class="arrow" style="transform:rotate(${(w.wind_dir || 0) + 180}deg)">↑</span></div>`;
 }
 
+// ---- race picker ----------------------------------------------------------------------------
+const pickerEl = document.getElementById("picker");
+const NOW_YEAR = new Date().getFullYear();
+const YEARS = []; for (let y = NOW_YEAR; y >= 2024; y--) YEARS.push(y);
+let pickerOpen = false, pickYear = YEARS[0], calendar = {}, calError = {}, serverState = "lobby", serverMsg = "";
+let pickerKey = "";
+
+function setPicker(d) {
+  if (d.mode !== "replay") { pickerEl.style.display = "none"; return; }
+  serverState = d.state || "playing"; serverMsg = d.message || "";
+  const show = pickerOpen || serverState !== "playing";
+  pickerEl.style.display = show ? "block" : "none";
+  if (!show) return;
+  const key = `${serverState}|${serverMsg}|${pickYear}|${!!calendar[pickYear]}|${calError[pickYear] || ""}|${pickerOpen}`;
+  if (key !== pickerKey) { pickerKey = key; renderPicker(); }
+  if (!calendar[pickYear] && !calError[pickYear] && !fetching[pickYear]) fetchYear(pickYear);
+}
+const fetching = {};
+async function fetchYear(y) {
+  fetching[y] = true;
+  try {
+    const r = await fetch(`/api/calendar?year=${y}`);
+    const d = await r.json();
+    if (d.error && !(d.races && d.races.length)) calError[y] = d.error; else calendar[y] = d.races;
+  } catch (e) { calError[y] = "could not reach the server"; }
+  fetching[y] = false; pickerKey = ""; setPicker({ mode: "replay", state: serverState, message: serverMsg });
+}
+function openPicker() { pickerOpen = true; pickerKey = ""; setPicker({ mode: "replay", state: serverState, message: serverMsg }); }
+function closePicker() { pickerOpen = false; pickerKey = ""; setPicker({ mode: "replay", state: serverState, message: serverMsg }); }
+async function startLoad(spec) {
+  pickerOpen = false;
+  serverState = "loading"; serverMsg = "Starting…"; pickerKey = "";
+  try { await fetch("/api/load", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(spec) }); }
+  catch (e) { serverState = "error"; serverMsg = "could not reach the server"; }
+  setPicker({ mode: "replay", state: serverState, message: serverMsg });
+}
+function fmtDate(iso) {
+  const d = new Date(iso + "T12:00:00Z");
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+}
+function renderPicker() {
+  let body = "";
+  if (serverState === "loading") {
+    body = `<div class="msg"><span class="spin"></span>${esc(serverMsg || "Loading…")}</div>`;
+  } else {
+    const races = calendar[pickYear];
+    let list;
+    if (calError[pickYear]) list = `<div class="msg err">Couldn't load the ${pickYear} calendar: ${esc(calError[pickYear])}<br>The saved recording above still works.</div>`;
+    else if (!races) list = `<div class="msg"><span class="spin"></span>Loading the ${pickYear} calendar…</div>`;
+    else if (!races.length) list = `<div class="msg">No completed races found for ${pickYear}.</div>`;
+    else list = `<div class="races">` + races.map((r, i) =>
+      `<div class="race"><div class="n"><span class="rn">R${i + 1}</span>${esc(r.name)}</div>` +
+      `<div class="m">${esc(r.location)}${r.country ? " · " + esc(r.country) : ""} · ${fmtDate(r.date)}</div>` +
+      r.sessions.map((q) => `<button class="btn ${q.name === "Race" ? "go" : ""}" data-key="${q.key}" data-name="${esc(r.name)}">▶ ${q.name}</button>`).join("") +
+      `</div>`).join("") + `</div>`;
+    body = (serverState === "error" ? `<div class="msg err">${esc(serverMsg)}</div>` : "") +
+      `<div class="feat"><div class="t"><b>São Paulo Grand Prix 2026 · Race</b><span>Recording of the real live feed, works offline</span></div>` +
+      `<button class="btn go" data-bundled="1">▶ Watch</button></div>` +
+      `<div class="tabs">${YEARS.map((y) => `<button data-year="${y}" class="${y === pickYear ? "on" : ""}">${y}</button>`).join("")}</div>` + list;
+  }
+  pickerEl.innerHTML = `<div class="panel">${serverState === "playing" || pickerOpen ? `<button class="close" title="Close">✕</button>` : ""}` +
+    `<h2>Choose a race to replay</h2><p class="lead">Races from 2024 onwards. Race data and track maps are downloaded from OpenF1 when you pick one (cached on this computer afterwards).</p>` +
+    body +
+    `<p class="fine">Unofficial fan project, not associated in any way with the Formula 1 companies. Estimated positions, not GPS. Data via OpenF1.</p></div>`;
+}
+pickerEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.classList.contains("close")) closePicker();
+  else if (b.dataset.year) { pickYear = Number(b.dataset.year); pickerKey = ""; setPicker({ mode: "replay", state: serverState, message: serverMsg }); }
+  else if (b.dataset.bundled) startLoad({ kind: "bundled" });
+  else if (b.dataset.key) startLoad({ kind: "openf1", session_key: Number(b.dataset.key), name: b.dataset.name });
+});
+
 // ---- replay controls ---------------------------------------------------------------------
 const ctl = document.getElementById("ctl");
 let ctlKey = "";
@@ -367,13 +451,15 @@ function updateControls(d) {
   const key = `${d.speed}|${d.paused}|${!!d.finished}`;
   if (key === ctlKey) return;
   ctlKey = key;
-  ctl.innerHTML = `<button data-r="1" title="Restart the replay">⟲</button>` +
+  ctl.innerHTML = `<button data-races="1" title="Choose another race">☰ Races</button>` +
+    `<button data-r="1" title="Restart the replay">⟲</button>` +
     `<button data-p="1" class="${d.paused ? "on" : ""}">${d.paused ? "▶ Play" : "⏸ Pause"}</button>` +
     SPEEDS.map((s) => `<button data-s="${s}" class="${s === d.speed && !d.paused ? "on" : ""}">${s}×</button>`).join("");
 }
 ctl.addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b || !ws || ws.readyState !== 1) return;
+  if (b.dataset.races) { openPicker(); return; }
   if (b.dataset.r) { ws.send(JSON.stringify({ restart: true })); lastFastest = null; prevPos.clear(); trails.clear(); }
   else if (b.dataset.p) ws.send(JSON.stringify({ paused: !(latest && latest.paused) }));
   else ws.send(JSON.stringify({ speed: Number(b.dataset.s), paused: false }));
@@ -398,22 +484,47 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+function clearTower() {
+  document.getElementById("rows").innerHTML = "";
+  document.getElementById("outlist").innerHTML = "";
+}
+
+let wasPlaying = false;
+function onFrame(data) {
+  setPicker(data);
+  const playingNow = !data.state || data.state === "playing";
+  if (playingNow && !wasPlaying) resetScene();     // a new or restarted replay: start the scene clean
+  wasPlaying = playingNow;
+  const notice = document.getElementById("notice");
+  if (data.state === "no_track") {                       // live, but no map for this circuit
+    notice.textContent = data.notice || ""; notice.style.display = data.notice ? "block" : "none";
+    snaps.length = 0; latest = null; clearTower(); return;
+  }
+  notice.style.display = "none";
+  if (data.state && data.state !== "playing") {
+    snaps.length = 0; latest = null; clearTower();
+    document.getElementById("title").textContent = "F1 Live Tracker";
+    document.getElementById("subtitle").textContent = data.state === "loading" ? "loading…" : "pick a race";
+    return;
+  }
+  if (!track || (data.track && track.name !== data.track)) { ensureTrack(data.track); return; }
+  if (data.label !== undefined && data.label !== currentLabel) { currentLabel = data.label; resetScene(); }
+  const at = performance.now();
+  latest = data;
+  snaps.push({ at, data });
+  while (snaps.length > 30) snaps.shift();
+  if (at - lastTowerUpdate > 250) {
+    lastTowerUpdate = at;
+    updateTower(data);
+    updateHeader(data);
+  }
+}
+
 function connect() {
   const conn = document.getElementById("conn");
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
   ws.onopen = () => { conn.className = "pill"; conn.title = "connected"; };
-  ws.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
-    const at = performance.now();
-    latest = data;
-    snaps.push({ at, data });
-    while (snaps.length > 30) snaps.shift();
-    if (at - lastTowerUpdate > 250) {
-      lastTowerUpdate = at;
-      updateTower(data);
-      updateHeader(data);
-    }
-  };
+  ws.onmessage = (ev) => onFrame(JSON.parse(ev.data));
   ws.onclose = () => { conn.className = "pill conn-bad"; conn.title = "disconnected"; setTimeout(connect, 1500); };
 }
 
@@ -423,4 +534,6 @@ function getVar(name) {
 }
 
 window.addEventListener("resize", fit);
-loadTrack().then(() => { connect(); requestAnimationFrame(frame); });
+fit();
+connect();
+requestAnimationFrame(frame);

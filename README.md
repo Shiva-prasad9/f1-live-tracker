@@ -19,21 +19,28 @@ python3 run.py          # Windows: python run.py
 ```
 
 1. It sets itself up on the first run (about a minute) and asks what you want:
-   - **1 = Replay**: watch the real 2026 São Paulo GP from a saved recording. Works any time, even offline.
-   - **2 = Live**: connect to the live F1 timing feed. Cars show up while a session is running.
+   - **1 = Replay**: opens a race picker in the browser. Choose a year (2024 onwards) and a race or sprint, or the saved
+     2026 São Paulo GP recording, which works offline. Race data and the track map are downloaded from
+     [OpenF1](https://openf1.org) when you pick one, then cached on your computer (first load takes under a minute).
+   - **2 = Live**: connect to the live F1 timing feed. Cars show up while a session is running. The track map for
+     the circuit is built automatically at start-up, so start live mode **before** the session begins
+     (OpenF1 is locked during live sessions).
 2. It prints a link, **http://localhost:8000**, and opens it in your browser.
 3. **Ctrl+C** in the terminal to stop.
 
 Skip the question with `python3 run.py replay` or `python3 run.py live`.
 
 In the page:
-- **Replay:** speed buttons (1x to 50x), pause (`Space`), restart (⟲).
+- **Replay:** **☰ Races** reopens the picker. Speed buttons (1x to 50x), pause (`Space`), restart (⟲).
 - **Hover** a car or a name in the table for its lap times, gap and tyres. **Click** to pin it.
 - **B** switches the background effects off. Add `?wx=rain` to the link to preview the rain effect.
 
 ### Trouble?
 - *"python3: command not found"*: install Python from https://www.python.org/downloads/ (on Windows tick "Add python.exe to PATH").
 - *Live shows a finished or empty session*: nothing is running right now. Use Replay, or try again on a race weekend.
+- *Replay picker says OpenF1 is locked or unreachable*: OpenF1 is closed while a real session is on and reopens soon after.
+  The saved São Paulo recording at the top of the picker still works.
+- *Other circuits are experimental*: the accuracy numbers below are for Interlagos only.
 - *Port 8000 busy*: it picks the next free port and prints the link, or pass `--port 9000`.
 - *Positions look a bit off*: they are **estimates** from timing data (no GPS needed), typically within about 40 m, see "Real race" below.
 
@@ -45,6 +52,7 @@ pip install -r requirements-dev.txt      # adds pytest + matplotlib
 pytest                                   # 21 tests
 
 python -m tracker live                                   # same as run.py live
+python -m tracker serve                                  # same as run.py replay (race picker in the browser)
 python -m tracker replay --file replays/sao-paulo-2026-race.jsonl.gz --speed 10 --start 0
 python -m tracker replay --year 2025 --event "São Paulo Grand Prix" --session Race   # rebuilt from OpenF1 (needs internet, not during a live session)
 python -m tracker validate --year 2025 --event "São Paulo Grand Prix" --session Race # error vs real GPS, writes a plot
@@ -199,7 +207,9 @@ centreline. The error is measured on the *drawn* position (what the page shows).
 - **Pit lane** drawing is time-based (22 s traversal), not measured.
 - **`SessionStatus: Started` semantics** in races (lights out vs formation lap) couldn't be checked against
   the archive; see the start confirmation above.
-- **Track models:** only `tracks/interlagos.json` is committed. Other circuits need
-  `python -m tracker build-track --circuit <OpenF1 circuit_short_name>`, run while no live session is on.
+- **Track models:** only `tracks/interlagos.json` is committed. Every other circuit is built on demand from OpenF1
+  (from the very race you replay, because layouts change between years) and cached in `data/tracks/`. That needs
+  OpenF1, which is locked while a live session runs, so live mode builds its track at start-up and shows a
+  message instead of a map if it can't. Accuracy has only been measured at Interlagos.
 - **Mini-sectors:** `Sectors[i].Segments[j].Status` changes probably mark mini-sector passes (~20 per lap). Using
   them as extra gates would likely cut the error a lot but needs their positions (future work).

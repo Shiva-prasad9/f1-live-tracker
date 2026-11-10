@@ -1,4 +1,4 @@
-"""python -m tracker {live,replay,build-track,validate}"""
+"""python -m tracker {live,serve,replay,build-track,validate}"""
 from __future__ import annotations
 
 import argparse
@@ -38,6 +38,10 @@ def main(argv=None) -> int:
     lv.add_argument("--port", type=int, default=8000)
     lv.add_argument("--track", help="track model name in tracks/ (default: from SessionInfo)")
 
+    sv = sub.add_parser("serve", help="replay server with a race picker in the browser")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--speed", type=float, default=10.0)
+
     def replay_args(sp):
         sp.add_argument("--year", type=int, default=2025)
         sp.add_argument("--event", default="São Paulo Grand Prix")
@@ -72,6 +76,14 @@ def main(argv=None) -> int:
         path = tr.save()
         print(f"saved {path}: length {tr.length:.0f} m, ref lap {tr.lap_time:.3f} s, gates "
               f"{[round(g) for g in tr.gates]}, pit entry {tr.pit_entry_s:.0f} exit {tr.pit_exit_s:.0f}")
+        return 0
+
+    if args.cmd == "serve":
+        from .server import run_lobby
+        try:
+            asyncio.run(run_lobby(args.port, args.speed))
+        except KeyboardInterrupt:
+            pass
         return 0
 
     if args.cmd == "live":

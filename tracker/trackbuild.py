@@ -56,19 +56,27 @@ def pick_reference_lap(session_key: int) -> dict:
     laps = openf1.get("laps", session_key=session_key)
     sc = _sc_windows(session_key)
     pit_laps = {(p["driver_number"], p["lap_number"]) for p in openf1.get("pit", session_key=session_key)}
-    good = []
-    for lap in laps:
-        if not lap.get("lap_duration") or not lap.get("date_start") or lap.get("is_pit_out_lap"):
-            continue
-        if not lap.get("duration_sector_1") or not lap.get("duration_sector_2") or not lap.get("duration_sector_3"):
-            continue
-        if lap["lap_number"] <= 1 or (lap["driver_number"], lap["lap_number"]) in pit_laps:
-            continue
-        t0 = parse_date(lap["date_start"])
-        t1 = t0 + timedelta(seconds=lap["lap_duration"])
-        if any(a < t1 and t0 < b for a, b in sc):
-            continue
-        good.append(lap)
+
+    def candidates(windows):
+        good = []
+        for lap in laps:
+            if not lap.get("lap_duration") or not lap.get("date_start") or lap.get("is_pit_out_lap"):
+                continue
+            if not lap.get("duration_sector_1") or not lap.get("duration_sector_2") or not lap.get("duration_sector_3"):
+                continue
+            if lap["lap_number"] <= 1 or (lap["driver_number"], lap["lap_number"]) in pit_laps:
+                continue
+            t0 = parse_date(lap["date_start"])
+            t1 = t0 + timedelta(seconds=lap["lap_duration"])
+            if any(a < t1 and t0 < b for a, b in windows):
+                continue
+            good.append(lap)
+        return good
+
+    # The neutralised windows are a soft preference: a red flag right after the start leaves one
+    # unterminated window that would exclude every lap, so fall back to none (the fastest lap of a
+    # race is never a neutralised one anyway).
+    good = candidates(sc) or candidates([])
     if not good:
         raise RuntimeError("no clean lap found")
     good.sort(key=lambda lap: lap["lap_duration"])
@@ -155,8 +163,9 @@ def find_pit_lane(track: Track, session_key: int, ref_lap_date: datetime):
     return track.length - 300.0, 300.0, []
 
 
-def build_track(circuit: str = "Interlagos", name: str | None = None) -> Track:
-    sess = find_race_session(circuit)
+def build_track(circuit: str = "Interlagos", name: str | None = None, session: dict | None = None) -> Track:
+    """Build from `session` (an OpenF1 sessions row) or from the latest past Race at `circuit`."""
+    sess = session or find_race_session(circuit)
     key = sess["session_key"]
     log.info("reference session %s %s (%s)", sess.get("year"), sess.get("session_name"), key)
     lap = pick_reference_lap(key)
@@ -174,7 +183,7 @@ def build_track(circuit: str = "Interlagos", name: str | None = None) -> Track:
     track.pit_entry_s, track.pit_exit_s, track.pit_lane = entry, exit_, lane
     track.meta = {
         "source": "OpenF1", "session_key": key, "year": sess.get("year"),
-        "circuit": circuit, "ref_driver": lap["driver_number"], "ref_lap": lap["lap_number"],
+        "circuit": circuit, "circuit_key": sess.get("circuit_key"), "ref_driver": lap["driver_number"], "ref_lap": lap["lap_number"],
         "sector_times": [lap["duration_sector_1"], lap["duration_sector_2"], lap["duration_sector_3"]],
         "built": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }

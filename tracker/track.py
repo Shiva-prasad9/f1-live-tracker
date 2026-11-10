@@ -15,7 +15,8 @@ from pathlib import Path
 
 import numpy as np
 
-TRACK_DIR = Path(__file__).resolve().parent.parent / "tracks"
+TRACK_DIR = Path(__file__).resolve().parent.parent / "tracks"            # committed (Interlagos)
+BUILT_DIR = Path(__file__).resolve().parent.parent / "data" / "tracks"   # built on demand, git-ignored
 
 
 @dataclass
@@ -58,11 +59,16 @@ class Track:
 
     @classmethod
     def load(cls, name: str) -> "Track":
-        return cls.from_dict(json.loads((TRACK_DIR / f"{name}.json").read_text()))
+        for d in (BUILT_DIR, TRACK_DIR):
+            p = d / f"{name}.json"
+            if p.exists():
+                return cls.from_dict(json.loads(p.read_text()))
+        raise FileNotFoundError(f"no track model {name!r} in {BUILT_DIR} or {TRACK_DIR}")
 
-    def save(self) -> Path:
-        TRACK_DIR.mkdir(exist_ok=True)
-        p = TRACK_DIR / f"{self.name}.json"
+    def save(self, directory: Path | None = None) -> Path:
+        directory = directory or TRACK_DIR
+        directory.mkdir(parents=True, exist_ok=True)
+        p = directory / f"{self.name}.json"
         p.write_text(json.dumps(self.to_dict(), separators=(",", ":")))
         return p
 

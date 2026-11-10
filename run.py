@@ -23,7 +23,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
 VPY = VENV / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-REPLAY_FILE = ROOT / "replays" / "sao-paulo-2026-race.jsonl.gz"
 
 
 def ensure_env() -> None:
@@ -54,7 +53,7 @@ def free_port(start: int) -> int:
 
 def choose() -> str:
     print("\nF1 Live Tracker\n")
-    print("  1) Replay - watch the 2026 São Paulo GP from a saved recording (works offline)")
+    print("  1) Replay - pick any race from 2024 onwards (or the saved 2026 São Paulo GP, works offline)")
     print("  2) Live   - connect to the live F1 timing feed (only shows cars while a session is running)\n")
     while True:
         try:
@@ -80,9 +79,7 @@ def main() -> None:
     port = free_port(args.port)
     cmd = [sys.executable, "-m", "tracker"]
     if mode == "replay":
-        if not REPLAY_FILE.exists():
-            sys.exit("Missing %s (re-download the repo)." % REPLAY_FILE)
-        cmd += ["replay", "--file", str(REPLAY_FILE), "--speed", "10", "--start", "0", "--port", str(port)]
+        cmd += ["serve", "--port", str(port), "--speed", "10"]
     else:
         cmd += ["live", "--port", str(port)]
 
@@ -99,7 +96,7 @@ def main() -> None:
                 time.sleep(0.5)
         print(f"\n  >>> Open {url} <<<   (Ctrl+C to stop)\n")
         if mode == "replay":
-            print("  Replay: use the speed buttons / Space to pause in the page; the 2026 race starts at lap 1.")
+            print("  Replay: pick a race in the page. Speed buttons / Space to pause once it plays.")
         else:
             print("  Live: cars appear when a session is running. No session now? Try the replay.")
         if not args.no_browser:

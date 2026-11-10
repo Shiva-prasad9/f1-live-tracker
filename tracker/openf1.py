@@ -24,6 +24,10 @@ class OpenF1Error(RuntimeError):
     pass
 
 
+class OpenF1Locked(OpenF1Error):
+    """OpenF1 refuses all requests while a real F1 session is running."""
+
+
 def get(endpoint: str, *filters: str, use_cache: bool = True, **params) -> list[dict]:
     """GET an OpenF1 endpoint.
 
@@ -44,7 +48,7 @@ def get(endpoint: str, *filters: str, use_cache: bool = True, **params) -> list[
         return json.loads(path.read_text())
 
     global _last_request
-    for attempt in range(6):
+    for attempt in range(8):
         wait = 0.6 - (time.time() - _last_request)
         if wait > 0:
             time.sleep(wait)
@@ -52,11 +56,15 @@ def get(endpoint: str, *filters: str, use_cache: bool = True, **params) -> list[
         log.info("GET %s", url)
         r = requests.get(url, timeout=120)
         if r.status_code == 429 or r.status_code >= 500:
-            time.sleep(2 * (attempt + 1))
+            log.info("OpenF1 busy (%s); retrying", r.status_code)
+            time.sleep(3 * (attempt + 1))
             continue
         if r.status_code == 404:
             data = []  # OpenF1 answers 404 for "no results"
             break
+        if r.status_code == 401:
+            raise OpenF1Locked("OpenF1 is locked while a live F1 session is running; "
+                               "it reopens shortly after the session ends.")
         if r.status_code != 200:
             raise OpenF1Error(f"{r.status_code} for {url}: {r.text[:300]}")
         data = r.json()

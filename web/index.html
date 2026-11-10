@@ -82,7 +82,36 @@
   @keyframes up { 0% { background: #3fb95066; } 100% { background: transparent; } }
   @keyframes down { 0% { background: #e5484d55; } 100% { background: transparent; } }
   .row .fl { color: #c77dff; font-size: 10px; margin-left: 3px; }
+  /* --- race picker --- */
+  #picker { position: fixed; inset: 0; z-index: 30; display: none; overflow-y: auto; padding: 24px 16px 40px;
+    background: #0b0d14f2; backdrop-filter: blur(4px); }
+  #picker .panel { max-width: 820px; margin: 0 auto; }
+  #picker h2 { margin: 0 0 4px; font-size: 20px; } #picker .lead { color: var(--muted); margin: 0 0 16px; }
+  #picker .close { position: absolute; top: 14px; right: 18px; all: unset; cursor: pointer; font-size: 20px; color: var(--muted); padding: 4px 8px; }
+  #picker .close:hover { color: var(--text); }
+  .feat { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: #1a1d23;
+    border: 1px solid #2c3140; margin-bottom: 18px; }
+  .feat .t { flex: 1; } .feat .t b { font-size: 14px; } .feat .t span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs button { all: unset; cursor: pointer; padding: 5px 14px; border-radius: 16px; background: #1a1d23; color: var(--muted); font-weight: 600; }
+  .tabs button.on { background: #e10600; color: #fff; box-shadow: 0 0 10px #e1060066; }
+  .races { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+  .race { padding: 10px 12px; border-radius: 10px; background: #161920; border: 1px solid #242833; }
+  .race:hover { border-color: #3a4152; } .race .n { font-weight: 600; } .race .m { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .race .rn { color: #e10600; font-weight: 700; font-size: 11px; margin-right: 6px; }
+  .btn { all: unset; cursor: pointer; padding: 4px 12px; border-radius: 8px; background: #262a33; font-weight: 600; font-size: 12px; margin-right: 6px; }
+  .btn:hover { background: #313644; } .btn.go { background: #e10600; color: #fff; } .btn.go:hover { background: #ff2a1f; }
+  .msg { color: var(--muted); padding: 18px 4px; } .msg.err { color: #ff8a8a; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid #444a5a; border-top-color: #e10600; border-radius: 50%;
+    animation: sp .8s linear infinite; vertical-align: -2px; margin-right: 8px; } @keyframes sp { to { transform: rotate(360deg); } }
+  #picker .fine { color: #6b7080; font-size: 11px; margin-top: 22px; line-height: 1.5; }
+  #notice { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); display: none; max-width: 520px; z-index: 6;
+    padding: 10px 14px; border-radius: 10px; background: #2a2418; border: 1px solid #f5c51855; color: #f5d675; text-align: center; }
+  #tower .foot { color: #5f6472; font-size: 10px; line-height: 1.4; margin: 14px 12px 0; }
   @media (max-width: 700px) {
+    #ctl { top: 44px; left: 8px; right: 8px; transform: none; flex-wrap: wrap; justify-content: center; }
+    #ctl button { padding: 4px 8px; }
+    #status { top: 8px; right: 8px; }
     #app { flex-direction: column; }
     #tower { width: 100%; height: 40%; order: 2; }
     #main { height: 60%; flex: none; }
@@ -96,6 +125,7 @@
     <div class="sub" id="subtitle">connecting…</div>
     <div id="rows"></div>
     <div id="outlist"></div>
+    <div class="foot">Unofficial fan project, not associated in any way with the Formula 1 companies.</div>
   </div>
   <div id="main">
     <canvas id="bg"></canvas>
@@ -103,6 +133,8 @@
     <div id="ctl"></div>
     <div id="card"></div>
     <div id="wx"></div>
+    <div id="notice"></div>
+    <div id="picker"></div>
     <div id="toasts"></div>
     <div id="status">
       <span class="pill" id="lap"></span>
